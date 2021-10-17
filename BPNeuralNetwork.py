@@ -1,109 +1,61 @@
-from utils import make_matrix, rand, sigmoid, sigmoid_derivative
+import numpy as np
+from tqdm import trange  # 替换range()可实现动态进度条，可忽略
 
 
-class BPNeuralNetwork:
-    def __init__(self):
-        self.input_n = 0
-        self.hidden_n = 0
-        self.output_n = 0
-        self.input_cells = []
-        self.hidden_cells = []
-        self.output_cells = []
-        self.input_weights = []
-        self.output_weights = []
-        self.input_correction = []
-        self.output_correction = []
+def sigmoid(x):  # 激活函数采用Sigmoid
+    return 1 / (1 + np.exp(-x))
 
-    def setup(self, ni, nh, no):
-        self.input_n = ni + 1
-        self.hidden_n = nh
-        self.output_n = no
-        # init cells
-        self.input_cells = [1.0] * self.input_n
-        self.hidden_cells = [1.0] * self.hidden_n
-        self.output_cells = [1.0] * self.output_n
-        # init weights
-        self.input_weights = make_matrix(self.input_n, self.hidden_n)
-        self.output_weights = make_matrix(self.hidden_n, self.output_n)
-        # random activate
-        for i in range(self.input_n):
-            for h in range(self.hidden_n):
-                self.input_weights[i][h] = rand(-0.2, 0.2)
-        for h in range(self.hidden_n):
-            for o in range(self.output_n):
-                self.output_weights[h][o] = rand(-2.0, 2.0)
-        # init correction matrix
-        self.input_correction = make_matrix(self.input_n, self.hidden_n)
-        self.output_correction = make_matrix(self.hidden_n, self.output_n)
 
-    def predict(self, inputs):
-        # activate input layer
-        for i in range(self.input_n - 1):
-            self.input_cells[i] = inputs[i]
-        # activate hidden layer
-        for j in range(self.hidden_n):
-            total = 0.0
-            for i in range(self.input_n):
-                total += self.input_cells[i] * self.input_weights[i][j]
-            self.hidden_cells[j] = sigmoid(total)
-        # activate output layer
-        for k in range(self.output_n):
-            total = 0.0
-            for j in range(self.hidden_n):
-                total += self.hidden_cells[j] * self.output_weights[j][k]
-            self.output_cells[k] = sigmoid(total)
-        return self.output_cells[:]
+def sigmoid_derivative(x):  # Sigmoid的导数
+    return sigmoid(x) * (1 - sigmoid(x))
 
-    def back_propagate(self, case, label, learn, correct):
-        # feed forward
-        self.predict(case)
-        # get output layer error
-        output_deltas = [0.0] * self.output_n
-        for o in range(self.output_n):
-            error = label[o] - self.output_cells[o]
-            output_deltas[o] = sigmoid_derivative(self.output_cells[o]) * error
-        # get hidden layer error
-        hidden_deltas = [0.0] * self.hidden_n
-        for h in range(self.hidden_n):
-            error = 0.0
-            for o in range(self.output_n):
-                error += output_deltas[o] * self.output_weights[h][o]
-            hidden_deltas[h] = sigmoid_derivative(self.hidden_cells[h]) * error
-        # update output weights
-        for h in range(self.hidden_n):
-            for o in range(self.output_n):
-                change = output_deltas[o] * self.hidden_cells[h]
-                self.output_weights[h][o] += learn * change + correct * self.output_correction[h][o]
-                self.output_correction[h][o] = change
-        # update input weights
-        for i in range(self.input_n):
-            for h in range(self.hidden_n):
-                change = hidden_deltas[h] * self.input_cells[i]
-                self.input_weights[i][h] += learn * change + correct * self.input_correction[i][h]
-                self.input_correction[i][h] = change
-        # get global error
-        error = 0.0
-        for o in range(len(label)):
-            error += 0.5 * (label[o] - self.output_cells[o]) ** 2
-        return error
 
-    def train(self, cases, labels, limit=10000, learn=0.05, correct=0.1):
-        for j in range(limit):
-            error = 0.0
-            for i in range(len(cases)):
-                label = labels[i]
-                case = cases[i]
-                error += self.back_propagate(case, label, learn, correct)
+class NeuralNetwork:  # 神经网络
+    def __init__(self, layers):  # layers为神经元个数列表
+        self.activation = sigmoid  # 激活函数
+        self.activation_deriv = sigmoid_derivative  # 激活函数导数
+        self.weights = []  # 权重列表
+        self.bias = []  # 偏置列表
+        for i in range(1, len(layers)):  # 参数初始化
+            self.weights.append(np.random.randn(layers[i - 1], layers[i]))
+            self.bias.append(np.random.randn(layers[i]) * (-1))
 
-    def test(self):
-        cases = [
-            [0, 0],
-            [0, 1],
-            [1, 0],
-            [1, 1],
-        ]
-        labels = [[0], [1], [1], [0]]
-        self.setup(2, 5, 1)
-        self.train(cases, labels, 10000, 0.05, 0.1)
-        for case in cases:
-            print(self.predict(case))
+    def fit(self, x, y, learning_rate=0.2, epochs=3):  # 反向传播算法
+        x = np.atleast_2d(x)
+        n = len(y)  # 样本数
+        p = max(n, epochs)  # 样本过少时根据epochs减半学习率
+        y = np.array(y)
+
+        for k in trange(epochs * n):  # 带进度条的训练过程
+            if (k + 1) % p == 0:
+                learning_rate *= 0.5  # 每训练完一代样本减半学习率
+            a = [x[k % n]]  # 保存各层激活值的列表
+            # 正向传播开始
+            for lay in range(len(self.weights)):
+                a.append(self.activation(np.dot(a[lay], self.weights[lay]) + self.bias[lay]))
+            # 反向传播开始
+            label = np.zeros(a[-1].shape)
+            label[y[k % n]] = 1  # 根据类号生成标签
+            error = label - a[-1]  # 误差值
+            deltas = [error * self.activation_deriv(a[-1])]  # 保存各层误差值的列表
+
+            layer_num = len(a) - 2  # 导数第二层开始
+            for j in range(layer_num, 0, -1):
+                deltas.append(deltas[-1].dot(self.weights[j].T) * self.activation_deriv(a[j]))  # 误差的反向传播
+            deltas.reverse()
+            for i in range(len(self.weights)):  # 正向更新权值
+                layer = np.atleast_2d(a[i])
+                delta = np.atleast_2d(deltas[i])
+                self.weights[i] += learning_rate * layer.T.dot(delta)
+                self.bias[i] += learning_rate * deltas[i]
+
+    def predict(self, x):  # 预测
+        a = np.array(x, dtype=np.float)
+        for lay in range(0, len(self.weights)):  # 正向传播
+            a = self.activation(np.dot(a, self.weights[lay]) + self.bias[lay])
+        a = list(100 * a / sum(a))  # 改为百分比显示
+        i = a.index(max(a))  # 预测值
+        per = []  # 各类的置信程度
+        for num in a:
+            per.append(str(round(num, 2)) + '%')
+        return i, per

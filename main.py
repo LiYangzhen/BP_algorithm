@@ -1,10 +1,8 @@
-from BPNeuralNetwork import BPNeuralNetwork
+from test import display_test
+from transform import convert_img_to_csv
 
-RATE = 0.01
-input_n = 0
-hidden_n = 0
-output_n = 0
+IMG_DIR = r"C:\Users\LYZ\Documents\Code\BP_algorithm\test"  #在此处修改为测试图片所在的地址
 
-if __name__ == '__main__':
-    nn = BPNeuralNetwork()
-    nn.test()
+convert_img_to_csv(IMG_DIR)  #将会在项目根目录生成test.csv文件
+
+display_test()
