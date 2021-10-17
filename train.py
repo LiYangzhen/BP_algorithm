@@ -27,7 +27,7 @@ def train():
     x = np.array(x)
     y = np.array(y)
     nn = NeuralNetwork([784, 300, 12])  # 神经网络各层神经元个数
-    nn.fit(x, y, 0.15, 100)
+    nn.fit(x, y, 0.3, 100)
     file = open('NN.txt', 'wb')
     pickle.dump(nn, file)
     count = 0
